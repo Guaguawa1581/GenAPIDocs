@@ -36,15 +36,3 @@ body {
   font-size: 1.5rem;
   color: var(--surface-800);
 }
-
-.w-full {
-  width: 100%;
-}
-
-.mt-2 { margin-top: 0.5rem; }
-.mt-4 { margin-top: 1rem; }
-.mt-6 { margin-top: 1.5rem; }
-
-.font-mono {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-}

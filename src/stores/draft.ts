@@ -16,8 +16,18 @@ export const useDraftStore = defineStore('draft', () => {
   if (!initialData.routeParams) initialData.routeParams = [];
   if (!initialData.queryParams) initialData.queryParams = [];
   if (!initialData.requestFields) initialData.requestFields = [];
-  if (!initialData.responseFields) initialData.responseFields = [];
-  if (!initialData.responses) initialData.responses = JSON.parse(JSON.stringify(DEFAULT_CONFIG.responses));
+  if (!initialData.responses) {
+    initialData.responses = JSON.parse(JSON.stringify(DEFAULT_CONFIG.responses));
+  } else {
+    // Migration: ensure each response has an id and fields array
+    initialData.responses.forEach((r: any) => {
+        if (!r.id) r.id = crypto.randomUUID();
+        if (!r.fields) r.fields = [];
+    });
+  }
+  // Cleanup obsolete top-level fields
+  delete initialData.responseFields;
+  delete initialData.responseJsonRaw;
 
   const config = ref<ApiDocConfig>(initialData);
 

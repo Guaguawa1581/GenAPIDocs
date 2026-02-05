@@ -3,23 +3,28 @@ export type TemplateType = 'list' | 'get' | 'post' | 'put' | 'delete';
 export interface ParamDef {
   name: string;
   description: string;
-  example: string; // Required for URL example generation
+  example: string;
 }
 
 export interface FieldDef {
+  id: string;
   name: string;
   type: string;
   example: string;
   description: string;
-  required?: boolean;
-  level?: number; // For nesting visualization ~
+  level: number; 
+  expanded?: boolean;
+  isCustom?: boolean;
+  children?: FieldDef[]; // Recursive structure
 }
 
 export interface ApiResponse {
+  id: string;
   statusCode: number;
   statusText: string;
   note?: string;
   rawJson: string;
+  fields: FieldDef[]; // Top level fields
 }
 
 export interface ApiDocConfig {
@@ -33,11 +38,20 @@ export interface ApiDocConfig {
   routeParams: ParamDef[];
   queryParams: ParamDef[];
   requestJsonRaw: string;
-  responseJsonRaw: string;
-  responseFields: FieldDef[]; // Derived from first-layer of response.records[0]
-  requestFields: FieldDef[];  // Derived from flattened request JSON
+  requestFields: FieldDef[];
   responses: ApiResponse[];
 }
+
+export const createDefaultFields = (): FieldDef[] => [];
+
+export const createDefaultResponse = (code: number, text: string, note: string = ''): ApiResponse => ({
+  id: crypto.randomUUID(),
+  statusCode: code,
+  statusText: text,
+  note: note,
+  rawJson: '',
+  fields: []
+});
 
 export const DEFAULT_CONFIG: ApiDocConfig = {
   templateType: 'get',
@@ -50,11 +64,9 @@ export const DEFAULT_CONFIG: ApiDocConfig = {
   routeParams: [],
   queryParams: [],
   requestJsonRaw: '',
-  responseJsonRaw: '',
-  responseFields: [],
   requestFields: [],
   responses: [
-    { statusCode: 200, statusText: 'Success', rawJson: '' },
-    { statusCode: 404, statusText: 'Not Found', note: '讀取 message', rawJson: '{"message": "Not Found"}' }
+    createDefaultResponse(200, 'Success'),
+    createDefaultResponse(404, 'Not Found', '讀取 message')
   ],
 };

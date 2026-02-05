@@ -1,20 +1,54 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useDraftStore } from '../../stores/draft';
 import { TemplateType } from '../../types';
 import Card from 'primevue/card';
+import Button from 'primevue/button';
+import Textarea from 'primevue/textarea';
+import Dialog from 'primevue/dialog';
+import { useToast } from 'primevue/usetoast';
 
+const emit = defineEmits(['next']);
 const draftStore = useDraftStore();
-const templates: { id: TemplateType; label: string; icon: string; method: string }[] = [
+const toast = useToast();
+
+const templates: { id: string; label: string; icon: string; method?: string; isImport?: boolean }[] = [
   { id: 'list', label: '清冊 (List API)', icon: 'pi-list', method: 'GET' },
   { id: 'get', label: 'GET (單筆/詳情)', icon: 'pi-search', method: 'GET' },
   { id: 'post', label: 'POST (新增)', icon: 'pi-plus', method: 'POST' },
   { id: 'put', label: 'PUT (修改)', icon: 'pi-pencil', method: 'PUT' },
   { id: 'delete', label: 'DELETE (刪除)', icon: 'pi-trash', method: 'DELETE' },
+  { id: 'import', label: '匯入舊設定', icon: 'pi-download', isImport: true },
 ];
 
+const showImportDialog = ref(false);
+const importJson = ref('');
+
 const selectTemplate = (t: typeof templates[0]) => {
-  draftStore.config.templateType = t.id;
+  if (t.isImport) {
+    showImportDialog.value = true;
+    return;
+  }
+  draftStore.config.templateType = t.id as TemplateType;
   draftStore.config.apiMeta.method = t.method as any;
+  emit('next');
+};
+
+const handleImport = () => {
+  if (!importJson.value) return;
+  try {
+    const data = JSON.parse(importJson.value);
+    if (data.apiMeta) {
+      draftStore.config = data;
+      toast.add({ severity: 'success', summary: '匯入成功', detail: '已從 JSON 載入設定', life: 3000 });
+      showImportDialog.value = false;
+      emit('next');
+    } else {
+      throw new Error('不正確的模板格式（遺失 apiMeta）');
+    }
+  } catch (e) {
+    toast.add({ severity: 'error', summary: '匯入失敗', detail: (e as Error).message, life: 3000 });
+  }
 };
 </script>
 
@@ -26,16 +60,39 @@ const selectTemplate = (t: typeof templates[0]) => {
         v-for="t in templates" 
         :key="t.id"
         class="template-card"
-        :class="{ 'selected': draftStore.config.templateType === t.id }"
+        :class="{ 
+          'selected': draftStore.config.templateType === t.id,
+          'import-card': t.isImport
+        }"
         @click="selectTemplate(t)"
       >
         <template #content>
-          <i :class="['pi', t.icon]" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-          <div class="label">{{ t.label }}</div>
-          <div class="method-tag" :class="t.method.toLowerCase()">{{ t.method }}</div>
+          <div class="d-flex flex-column align-items-center">
+            <i :class="['pi', t.icon]" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
+            <div class="label">{{ t.label }}</div>
+            <div v-if="t.method" class="method-tag" :class="t.method.toLowerCase()">{{ t.method }}</div>
+          </div>
         </template>
       </Card>
     </div>
+
+    <!-- Import Dialog -->
+    <Dialog v-model:visible="showImportDialog" modal header="匯入現有設定 (JSON)" :style="{ width: '50vw' }">
+      <div class="p-fluid">
+        <p class="small text-secondary mb-3">貼入先前從 Step 5 複製的 JSON 設定值。</p>
+        <Textarea 
+          v-model="importJson" 
+          rows="12" 
+          class="w-100 font-monospace mb-3" 
+          placeholder='{ "apiMeta": { ... }, "routeParams": [ ... ], ... }'
+          autoResize
+        />
+        <div class="d-flex justify-content-end gap-2">
+          <Button label="取消" icon="pi pi-times" variant="text" @click="showImportDialog = false" />
+          <Button label="匯入並進入下一步" icon="pi pi-check" @click="handleImport" :disabled="!importJson" />
+        </div>
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -63,9 +120,21 @@ const selectTemplate = (t: typeof templates[0]) => {
   background-color: rgba(59, 130, 246, 0.05);
 }
 
+.template-card.import-card {
+  border-style: dashed;
+  border-color: #94a3b8;
+  background-color: #f8fafc;
+}
+
+.template-card.import-card:hover {
+  border-color: #64748b;
+  background-color: #f1f5f9;
+}
+
 .label {
   font-weight: bold;
   margin-bottom: 0.5rem;
+  font-size: 1.1rem;
 }
 
 .method-tag {

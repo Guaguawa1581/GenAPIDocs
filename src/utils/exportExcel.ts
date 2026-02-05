@@ -1,13 +1,13 @@
 import * as XLSX from 'xlsx';
-import { ApiDocConfig } from '../types';
+import { ApiDocConfig, FieldDef } from '../types';
 import { generateUrlExample } from './parseUrl';
+import { flattenFields } from './parseJson';
 
 export function exportToExcel(config: ApiDocConfig) {
   const wb = XLSX.utils.book_new();
   const wsData: any[][] = [];
   const merges: XLSX.Range[] = [];
 
-  // Helper to push empty columns to align with D/E
   const fillToC = (arr: any[]) => {
     while (arr.length < 3) arr.push('');
     return arr;
@@ -35,7 +35,7 @@ export function exportToExcel(config: ApiDocConfig) {
 
   wsData.push([]); currentRow++;
 
-  // --- Route & Query Tables (Standard) ---
+  // --- Route & Query Tables ---
   if (config.routeParams.length > 0) {
     wsData.push(['Route 區塊表格']);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 4 } });
@@ -62,24 +62,21 @@ export function exportToExcel(config: ApiDocConfig) {
     wsData.push([]); currentRow++;
   }
 
-  // --- 2. JSON Body Section (POST/PUT/DELETE) ---
-  const hasRequestBody = ['POST', 'PUT', 'DELETE'].includes(config.apiMeta.method) && config.requestJsonRaw;
-  if (hasRequestBody) {
+  // --- 2. Request Body Section ---
+  const requestFlat = flattenFields(config.requestFields);
+  if (requestFlat.length > 0) {
     const startBodyRow = currentRow;
-    // Row 1: Title
     wsData.push(fillToC(['JSON Body']));
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 4 } });
     currentRow++;
 
-    // Row 2: Header for table
     const row2 = fillToC(['', '', '']);
     row2[3] = '參數';
     row2[4] = '意思';
     wsData.push(row2);
     currentRow++;
 
-    // Row 3+: Parameters
-    config.requestFields.forEach(f => {
+    requestFlat.forEach(f => {
       const prefix = '~'.repeat(f.level || 0);
       const row = fillToC(['', '', '']);
       row[3] = prefix + f.name;
@@ -88,19 +85,15 @@ export function exportToExcel(config: ApiDocConfig) {
       currentRow++;
     });
 
-    // Merge JSON Area A:C
-    // A(startRow+1) ~ C(startRow + 參數數量 + 4) -> let's just cover the params row
     const jsonEndRow = Math.max(currentRow - 1, startBodyRow + 5); 
     merges.push({ s: { r: startBodyRow + 1, c: 0 }, e: { r: jsonEndRow, c: 2 } });
     
-    // Fill formatted JSON in the merged top cell
     try {
-        wsData[startBodyRow + 1][0] = JSON.stringify(JSON.parse(config.requestJsonRaw), null, 2);
+        wsData[startBodyRow + 1][0] = JSON.stringify(JSON.parse(config.requestJsonRaw || '{}'), null, 2);
     } catch(e) {
         wsData[startBodyRow + 1][0] = config.requestJsonRaw;
     }
 
-    // Ensure we are past the JSON block
     while (wsData.length <= jsonEndRow) {
         wsData.push(['', '', '', '', '']);
     }
@@ -111,35 +104,25 @@ export function exportToExcel(config: ApiDocConfig) {
   // --- 3. Responses Section ---
   config.responses.forEach(resp => {
     const startRespRow = currentRow;
-    // Row 1: Header
-    const row1 = [resp.statusCode, resp.statusText, '', '回傳Json', ''];
+    const combinedStatus = `${resp.statusCode} ${resp.statusText}${resp.note ? ` (${resp.note})` : ''}`;
+    const row1 = [combinedStatus, '', '', '回傳Json', ''];
     wsData.push(row1);
-    merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 2 } }); // Status Text
-    merges.push({ s: { r: currentRow, c: 3 }, e: { r: currentRow, c: 4 } }); // "回傳Json" title
+    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 2 } });
+    merges.push({ s: { r: currentRow, c: 3 }, e: { r: currentRow, c: 4 } });
     currentRow++;
 
-    // Row 2: Table Header
     const row2 = ['', '', '', '參數', '意思'];
     wsData.push(row2);
     currentRow++;
 
-    // Fields
-    let paramCount = 0;
-    if (resp.statusCode === 200) {
-      config.responseFields.forEach(f => {
-        wsData.push(['', '', '', f.name, f.description]);
-        currentRow++;
-        paramCount++;
-      });
-    } else if (resp.statusCode === 404) {
-      wsData.push(['', '', '', '狀態404：查無的錯誤，讀取message', '']);
-      merges.push({ s: { r: currentRow, c: 3 }, e: { r: currentRow, c: 4 } });
+    const respFlat = flattenFields(resp.fields);
+    respFlat.forEach(f => {
+      const prefix = '~'.repeat(f.level || 0);
+      wsData.push(['', '', '', prefix + f.name, f.description]);
       currentRow++;
-      paramCount = 1;
-    }
+    });
 
-    // Merge JSON Area A:C
-    const jsonEndRow = Math.max(currentRow - 1, startRespRow + 4);
+    const jsonEndRow = Math.max(currentRow - 1, startRespRow + 5);
     merges.push({ s: { r: startRespRow + 1, c: 0 }, e: { r: jsonEndRow, c: 2 } });
     
     try {
@@ -158,7 +141,6 @@ export function exportToExcel(config: ApiDocConfig) {
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!merges'] = merges;
   
-  // Column Widths
   ws['!cols'] = [
     { wch: 15 }, // A
     { wch: 15 }, // B

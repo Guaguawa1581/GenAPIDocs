@@ -3,7 +3,7 @@ import { useDraftStore } from '../../stores/draft';
 import { parseUrl, generateUrlExample } from '../../utils/parseUrl';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
-import Dropdown from 'primevue/dropdown';
+import Select from 'primevue/select';
 
 const draftStore = useDraftStore();
 const methods = ['GET', 'POST', 'PUT', 'DELETE'];
@@ -21,12 +21,12 @@ const handleUrlChange = () => {
     <div class="form-grid">
       <div class="field">
         <label for="title">功能名稱</label>
-        <InputText id="title" v-model="draftStore.config.apiMeta.title" placeholder="例如：取得客戶清冊" class="w-full" />
+        <InputText id="title" v-model="draftStore.config.apiMeta.title" placeholder="例如：取得客戶清冊" class="w-100" />
       </div>
 
       <div class="field">
         <label for="method">Method</label>
-        <Dropdown id="method" v-model="draftStore.config.apiMeta.method" :options="methods" class="w-full" />
+        <Select id="method" v-model="draftStore.config.apiMeta.method" :options="methods" class="w-100" />
       </div>
 
       <div class="field col-span-2">
@@ -35,7 +35,7 @@ const handleUrlChange = () => {
           id="url" 
           v-model="draftStore.config.apiMeta.url" 
           placeholder="api/Client/{id}?t=1" 
-          class="w-full"
+          class="w-100"
           @blur="handleUrlChange"
         />
         <small>輸入後會自動解析 Route 跟 Query 參數</small>
@@ -85,7 +85,7 @@ const handleUrlChange = () => {
 
       <div class="field col-span-2">
         <label for="desc">說明</label>
-        <Textarea id="desc" v-model="draftStore.config.apiMeta.description" rows="3" class="w-full" />
+        <Textarea id="desc" v-model="draftStore.config.apiMeta.description" rows="3" class="w-100" />
       </div>
     </div>
   </div>
@@ -109,10 +109,6 @@ const handleUrlChange = () => {
 
 .col-span-2 {
   grid-column: span 2;
-}
-
-.w-full {
-  width: 100%;
 }
 
 .params-table {
