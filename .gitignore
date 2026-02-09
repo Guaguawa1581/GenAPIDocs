@@ -25,4 +25,6 @@ dist-ssr
 
 # Brain (System files)
 brain/
-plan.txt
+
+.env
+.env.local

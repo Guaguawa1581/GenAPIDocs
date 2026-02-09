@@ -1,0 +1,10 @@
+1. url範例，url.name靠右
+
+
+
+
+
+
+api/QMS/{type}/InsRequest?page=1&limit=10&fullOrderNo=M0E1-2014040220-0040-H400
+
+

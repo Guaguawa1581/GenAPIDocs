@@ -1,9 +1,11 @@
-export type TemplateType = 'list' | 'get' | 'post' | 'put' | 'delete';
+export type TemplateType = "list" | "get" | "post" | "put" | "delete";
 
 export interface ParamDef {
   name: string;
   description: string;
   example: string;
+  showInDesc?: boolean;
+  includeInUrl?: boolean;
 }
 
 export interface FieldDef {
@@ -12,7 +14,7 @@ export interface FieldDef {
   type: string;
   example: string;
   description: string;
-  level: number; 
+  level: number;
   expanded?: boolean;
   isCustom?: boolean;
   children?: FieldDef[]; // Recursive structure
@@ -27,16 +29,23 @@ export interface ApiResponse {
   fields: FieldDef[]; // Top level fields
 }
 
+export interface UrlExample {
+  id: string;
+  name: string;
+  url: string;
+}
+
 export interface ApiDocConfig {
   templateType: TemplateType;
   apiMeta: {
     title: string;
     description: string;
     url: string;
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    method: "GET" | "POST" | "PUT" | "DELETE";
   };
   routeParams: ParamDef[];
   queryParams: ParamDef[];
+  urlExamples: UrlExample[];
   requestJsonRaw: string;
   requestFields: FieldDef[];
   responses: ApiResponse[];
@@ -44,29 +53,34 @@ export interface ApiDocConfig {
 
 export const createDefaultFields = (): FieldDef[] => [];
 
-export const createDefaultResponse = (code: number, text: string, note: string = ''): ApiResponse => ({
+export const createDefaultResponse = (
+  code: number,
+  text: string,
+  note: string = "",
+): ApiResponse => ({
   id: crypto.randomUUID(),
   statusCode: code,
   statusText: text,
   note: note,
-  rawJson: '',
-  fields: []
+  rawJson: "",
+  fields: [],
 });
 
 export const DEFAULT_CONFIG: ApiDocConfig = {
-  templateType: 'get',
+  templateType: "get",
   apiMeta: {
-    title: '',
-    description: '',
-    url: '',
-    method: 'GET',
+    title: "",
+    description: "",
+    url: "",
+    method: "GET",
   },
   routeParams: [],
   queryParams: [],
-  requestJsonRaw: '',
+  urlExamples: [],
+  requestJsonRaw: "",
   requestFields: [],
   responses: [
-    createDefaultResponse(200, 'Success'),
-    createDefaultResponse(404, 'Not Found', '讀取 message')
+    createDefaultResponse(200, "Success"),
+    createDefaultResponse(404, "Not Found", "讀取 message"),
   ],
 };
