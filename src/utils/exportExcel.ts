@@ -41,7 +41,7 @@ export function exportToExcel(config: ApiDocConfig) {
       currentRow++;
     });
   } else {
-    wsData.push(["URL範例", urlExample]);
+    wsData.push(["", ""]);
     merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
     currentRow++;
   }
@@ -60,8 +60,8 @@ export function exportToExcel(config: ApiDocConfig) {
     });
     // params 在B,C欄列出
     config.routeParams.forEach((p, index) => {
-      // 第一列要包含 "FromRoute"，其餘 A 欄給空字串
-      const firstCol = index === 0 ? "FromRoute" : "";
+      // 第一列要包含 "FormRoute"，其餘 A 欄給空字串
+      const firstCol = index === 0 ? "FormRoute" : "";
       let descValue: any = p.description;
       if (typeof descValue === "string" && descValue.startsWith("=")) {
         descValue = { f: descValue.slice(1) };
@@ -77,12 +77,9 @@ export function exportToExcel(config: ApiDocConfig) {
 
       currentRow++;
     });
-
-    wsData.push([]);
-    currentRow++;
   } else {
     // 沒資料也跳一行
-    wsData.push(["FromRoute", "", ""]);
+    wsData.push(["FormRoute", "", ""]);
     merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
     currentRow++;
   }
@@ -95,7 +92,7 @@ export function exportToExcel(config: ApiDocConfig) {
     const queryStartRow = currentRow;
     const queryEndRow = currentRow + visibleQueryParams.length - 1;
 
-    // 1. A 欄垂直合併：顯示 "FromQuery"
+    // 1. A 欄垂直合併：顯示 "FormQuery"
     merges.push({
       s: { r: queryStartRow, c: 0 },
       e: { r: queryEndRow, c: 0 },
@@ -111,7 +108,7 @@ export function exportToExcel(config: ApiDocConfig) {
       }
 
       // 第一列 A 欄填值，其餘留空 (靠 merges 合併)
-      const firstCol = index === 0 ? "FromQuery" : "";
+      const firstCol = index === 0 ? "FormQuery" : "";
       wsData.push([firstCol, p.name, descValue]);
 
       // 3. C 欄到 E 欄水平合併 (c: 2 到 c: 4)
@@ -122,13 +119,9 @@ export function exportToExcel(config: ApiDocConfig) {
 
       currentRow++;
     });
-
-    // 結尾跳行
-    wsData.push([]);
-    currentRow++;
   } else {
     // 沒資料時的處理：A 欄標題，B-E 欄合併寫「無參數」
-    wsData.push(["FromQuery", "無參數資料"]);
+    wsData.push(["FormQuery", "無參數資料"]);
     merges.push({
       s: { r: currentRow, c: 1 },
       e: { r: currentRow, c: 4 },
@@ -193,12 +186,14 @@ export function exportToExcel(config: ApiDocConfig) {
   }
 
   // --- 3. Responses Section ---
+  wsData.push(["Responses JSON"]);
+  merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 4 } });
+  currentRow++;
   config.responses.forEach((resp) => {
     const startRespRow = currentRow;
-    const combinedStatus = `${resp.statusCode} ${resp.statusText}${resp.note ? ` (${resp.note})` : ""}`;
-    const row1 = [combinedStatus, "", "", "回傳Json", ""];
+    const row1 = [resp.statusCode, resp.statusText, "", resp.note, ""];
     wsData.push(row1);
-    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 2 } });
+    merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 2 } });
     merges.push({ s: { r: currentRow, c: 3 }, e: { r: currentRow, c: 4 } });
     currentRow++;
 
@@ -216,6 +211,9 @@ export function exportToExcel(config: ApiDocConfig) {
       wsData.push(["", "", "", prefix + f.name, descValue]);
       currentRow++;
     });
+    // 多一行
+    wsData.push([]);
+    currentRow++;
 
     const jsonEndRow = Math.max(currentRow - 1, startRespRow + 5);
     merges.push({
@@ -237,8 +235,8 @@ export function exportToExcel(config: ApiDocConfig) {
       wsData.push(["", "", "", "", ""]);
     }
     currentRow = wsData.length;
-    wsData.push([]);
-    currentRow++;
+    // wsData.push([]);
+    // currentRow++;
   });
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
