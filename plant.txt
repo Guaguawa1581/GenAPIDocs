@@ -8,3 +8,11 @@
 api/QMS/{type}/InsRequest?page=1&limit=10&fullOrderNo=M0E1-2014040220-0040-H400
 
 
+1. formRoute,formQuery,Json Body,Responses JSON區的第一行都要有上雙框線，其他欄位都是一般框線
+2. actionText, "參數", "意思"都是粗體
+3. config.apiMeta.url內{XXX}的XXX要是藍色字
+4. responses中如果resp.statusCode是200系列的則使用綠色字，400系列的則使用紅色字，500系列的則使用黃色字
+5. 整體字體10,字體Arial 
+
+6. "Responses JSON","JSON Body",resp.statusText這幾個要置中
+7. urlEx.name,statusCode這幾個要靠右對齊

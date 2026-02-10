@@ -1,32 +1,133 @@
-import * as XLSX from "xlsx";
-import { ApiDocConfig, FieldDef } from "../types";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
+import { ApiDocConfig } from "../types";
 import { generateUrlExample } from "./parseUrl";
 import { flattenFields } from "./parseJson";
+import { EXCEL_STYLES } from "../config/excelStyles";
 
-export function exportToExcel(config: ApiDocConfig) {
-  const wb = XLSX.utils.book_new();
-  const wsData: any[][] = [];
-  const merges: XLSX.Range[] = [];
+// Helper to parse URL for rich text
+function parseUrlToRichText(url: string) {
+  const parts: any[] = [];
+  let currentStr = "";
+  let inBracket = false;
 
-  const fillToC = (arr: any[]) => {
-    while (arr.length < 3) arr.push("");
-    return arr;
+  for (let i = 0; i < url.length; i++) {
+    const char = url[i];
+    if (char === "{") {
+      if (currentStr) {
+        parts.push({
+          text: currentStr,
+          font: { name: EXCEL_STYLES.FONT.NAME, size: EXCEL_STYLES.FONT.SIZE },
+        });
+        currentStr = "";
+      }
+      inBracket = true;
+      currentStr += char;
+    } else if (char === "}") {
+      currentStr += char;
+      parts.push({
+        text: currentStr,
+        font: {
+          name: EXCEL_STYLES.FONT.NAME,
+          size: EXCEL_STYLES.FONT.SIZE,
+          color: EXCEL_STYLES.FONT.COLOR_BLUE,
+        },
+      });
+      currentStr = "";
+      inBracket = false;
+    } else {
+      currentStr += char;
+    }
+  }
+  if (currentStr) {
+    if (inBracket) {
+      parts.push({
+        text: currentStr,
+        font: {
+          name: EXCEL_STYLES.FONT.NAME,
+          size: EXCEL_STYLES.FONT.SIZE,
+          color: EXCEL_STYLES.FONT.COLOR_BLUE,
+        },
+      });
+    } else {
+      parts.push({
+        text: currentStr,
+        font: { name: EXCEL_STYLES.FONT.NAME, size: EXCEL_STYLES.FONT.SIZE },
+      });
+    }
+  }
+  return { richText: parts };
+}
+
+// Helper to determine status color
+function getStatusColor(code: number) {
+  if (code >= 200 && code < 300) return EXCEL_STYLES.FONT.COLOR_GREEN;
+  if (code >= 400 && code < 500) return EXCEL_STYLES.FONT.COLOR_RED;
+  if (code >= 500) return EXCEL_STYLES.FONT.COLOR_YELLOW;
+  return EXCEL_STYLES.FONT.COLOR_DEFAULT;
+}
+
+export async function exportToExcel(config: ApiDocConfig) {
+  const workbook = new ExcelJS.Workbook();
+  const titleForName =
+    config.apiMeta.description || config.apiMeta.title || "API";
+  const sanitizedTitle = titleForName.replace(/[\\/?*:[\]]/g, "_");
+  const sheetName = `${config.apiMeta.method}_${sanitizedTitle}`.slice(0, 31);
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  let currentRowIdx = 1;
+
+  // Helper to add a row and apply default styles
+  const addRow = (values: any[]) => {
+    const row = worksheet.getRow(currentRowIdx);
+    row.values = values;
+
+    // Apply default styles to all cells in the row (columns 1-5)
+    for (let c = 1; c <= 5; c++) {
+      const cell = row.getCell(c);
+      cell.font = {
+        name: EXCEL_STYLES.FONT.NAME,
+        size: EXCEL_STYLES.FONT.SIZE,
+      };
+      cell.border = {
+        top: { style: EXCEL_STYLES.BORDER.THIN },
+        left: { style: EXCEL_STYLES.BORDER.THIN },
+        bottom: { style: EXCEL_STYLES.BORDER.THIN },
+        right: { style: EXCEL_STYLES.BORDER.THIN },
+      };
+      cell.alignment = EXCEL_STYLES.ALIGNMENT.DEFAULT;
+    }
+
+    currentRowIdx++;
+    return row;
   };
 
-  let currentRow = 0;
+  // Helper to merge cells
+  const mergeCells = (r: number, c1: number, c2: number) => {
+    worksheet.mergeCells(r, c1, r, c2);
+  };
+
+  // Helper for double top border
+  const setDoubleTopBorder = (rowIdx: number) => {
+    const row = worksheet.getRow(rowIdx);
+    for (let c = 1; c <= 5; c++) {
+      const cell = row.getCell(c);
+      cell.border = {
+        ...cell.border,
+        top: { style: EXCEL_STYLES.BORDER.DOUBLE },
+      };
+    }
+  };
 
   // --- 1. Header Section ---
-  let titleContent: any = config.apiMeta.title;
-  if (titleContent.startsWith("=")) {
-    titleContent = { f: titleContent.slice(1) };
-  }
-  wsData.push(["API功能", titleContent]);
-  merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
-  currentRow++;
+  const titleContent = config.apiMeta.title;
+  addRow(["API功能", titleContent]);
+  mergeCells(currentRowIdx - 1, 2, 5); // B to E
 
-  wsData.push(["API URL", config.apiMeta.url]);
-  merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
-  currentRow++;
+  // API URL
+  const urlRichText = parseUrlToRichText(config.apiMeta.url);
+  addRow(["API URL", urlRichText]);
+  mergeCells(currentRowIdx - 1, 2, 5);
 
   const urlExample = generateUrlExample(
     config.apiMeta.url,
@@ -36,225 +137,218 @@ export function exportToExcel(config: ApiDocConfig) {
 
   if (config.urlExamples && config.urlExamples.length > 0) {
     config.urlExamples.forEach((ex) => {
-      wsData.push([ex.name || "URL範例", ex.url]);
-      merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
-      currentRow++;
+      addRow([ex.name, ex.url]);
+      mergeCells(currentRowIdx - 1, 2, 5);
+      worksheet.getCell(currentRowIdx - 1, 1).alignment =
+        EXCEL_STYLES.ALIGNMENT.RIGHT;
     });
   } else {
-    wsData.push(["", ""]);
-    merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
-    currentRow++;
+    addRow(["", ""]);
+    mergeCells(currentRowIdx - 1, 2, 5);
   }
 
-  // --- Route & Query Tables ---
-  // RouteParams
+  // --- Route Params ---
   if (config.routeParams.length > 0) {
-    const routeParamsStartRow: number = currentRow;
-    const routeParamsEndRow: number =
-      currentRow + config.routeParams.length - 1;
-
-    // RouteTitle垂直合併
-    merges.push({
-      s: { r: routeParamsStartRow, c: 0 },
-      e: { r: routeParamsEndRow, c: 0 },
-    });
-    // params 在B,C欄列出
+    const startRow = currentRowIdx;
     config.routeParams.forEach((p, index) => {
-      // 第一列要包含 "FormRoute"，其餘 A 欄給空字串
       const firstCol = index === 0 ? "FormRoute" : "";
-      let descValue: any = p.description;
-      if (typeof descValue === "string" && descValue.startsWith("=")) {
-        descValue = { f: descValue.slice(1) };
-      }
-
-      wsData.push([firstCol, p.name, descValue]);
-
-      // 處理每一列的 C 到 E 欄合併 (Index 2 到 4)
-      merges.push({
-        s: { r: currentRow, c: 2 }, // C 欄
-        e: { r: currentRow, c: 4 }, // E 欄
-      });
-
-      currentRow++;
+      addRow([firstCol, p.name, p.description]);
+      mergeCells(currentRowIdx - 1, 3, 5); // C to E
     });
+    // Merge "FormRoute" vertical
+    if (currentRowIdx - 1 > startRow) {
+      worksheet.mergeCells(startRow, 1, currentRowIdx - 1, 1);
+    }
+    setDoubleTopBorder(startRow);
   } else {
-    // 沒資料也跳一行
-    wsData.push(["FormRoute", "", ""]);
-    merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
-    currentRow++;
+    const startRow = currentRowIdx;
+    addRow(["FormRoute", "", ""]);
+    mergeCells(startRow, 2, 5); // B to E
+    setDoubleTopBorder(startRow);
   }
 
-  // QueryParams
+  // --- Query Params ---
   const visibleQueryParams = config.queryParams.filter(
     (p) => p.showInDesc !== false,
   );
   if (visibleQueryParams.length > 0) {
-    const queryStartRow = currentRow;
-    const queryEndRow = currentRow + visibleQueryParams.length - 1;
-
-    // 1. A 欄垂直合併：顯示 "FormQuery"
-    merges.push({
-      s: { r: queryStartRow, c: 0 },
-      e: { r: queryEndRow, c: 0 },
-    });
-
-    // 2. 迭代寫入資料
+    const startRow = currentRowIdx;
     visibleQueryParams.forEach((p, index) => {
-      let descValue: any = p.description;
-
-      // 支援 = 開頭的 Excel 公式
-      if (typeof descValue === "string" && descValue.startsWith("=")) {
-        descValue = { f: descValue.slice(1) };
-      }
-
-      // 第一列 A 欄填值，其餘留空 (靠 merges 合併)
       const firstCol = index === 0 ? "FormQuery" : "";
-      wsData.push([firstCol, p.name, descValue]);
-
-      // 3. C 欄到 E 欄水平合併 (c: 2 到 c: 4)
-      merges.push({
-        s: { r: currentRow, c: 2 },
-        e: { r: currentRow, c: 4 },
-      });
-
-      currentRow++;
+      addRow([firstCol, p.name, p.description]);
+      mergeCells(currentRowIdx - 1, 3, 5);
     });
+    if (currentRowIdx - 1 > startRow) {
+      worksheet.mergeCells(startRow, 1, currentRowIdx - 1, 1);
+    }
+    setDoubleTopBorder(startRow);
   } else {
-    // 沒資料時的處理：A 欄標題，B-E 欄合併寫「無參數」
-    wsData.push(["FormQuery", "無參數資料"]);
-    merges.push({
-      s: { r: currentRow, c: 1 },
-      e: { r: currentRow, c: 4 },
-    });
-    currentRow++;
+    const startRow = currentRowIdx;
+    addRow(["FormQuery", "無參數資料"]);
+    mergeCells(startRow, 2, 5);
+    setDoubleTopBorder(startRow);
   }
 
+  // --- Action ---
   const actionText = `Http${config.apiMeta.method.charAt(0).toUpperCase()}${config.apiMeta.method.slice(1).toLowerCase()}`;
-  wsData.push(["行為", actionText]);
-  merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 4 } });
-  currentRow++;
+  addRow(["行為", actionText]);
+  mergeCells(currentRowIdx - 1, 2, 5);
+  // Bold actionText (Cell B)
+  worksheet.getCell(currentRowIdx - 1, 2).font = {
+    name: EXCEL_STYLES.FONT.NAME,
+    size: EXCEL_STYLES.FONT.SIZE,
+    bold: true,
+  };
 
   // --- 2. Request Body Section ---
   const requestFlat = flattenFields(config.requestFields);
   if (requestFlat.length > 0) {
-    const startBodyRow = currentRow;
-    wsData.push(fillToC(["JSON Body"]));
-    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 4 } });
-    currentRow++;
+    const startBodyRow = currentRowIdx;
 
-    const row2 = fillToC(["", "", ""]);
-    row2[3] = "參數";
-    row2[4] = "意思";
-    wsData.push(row2);
-    currentRow++;
+    // Header
+    addRow(["JSON Body"]);
+    mergeCells(startBodyRow, 1, 5);
+    setDoubleTopBorder(startBodyRow);
+    worksheet.getCell(startBodyRow, 1).alignment =
+      EXCEL_STYLES.ALIGNMENT.CENTER;
+
+    // Subheader
+    const subHeaderRowIdx = currentRowIdx;
+    addRow(["", "", "", "參數", "意思"]);
+    // Bold "參數", "意思"
+    worksheet.getCell(subHeaderRowIdx, 4).font = {
+      name: EXCEL_STYLES.FONT.NAME,
+      size: EXCEL_STYLES.FONT.SIZE,
+      bold: true,
+    };
+    worksheet.getCell(subHeaderRowIdx, 5).font = {
+      name: EXCEL_STYLES.FONT.NAME,
+      size: EXCEL_STYLES.FONT.SIZE,
+      bold: true,
+    };
 
     requestFlat.forEach((f) => {
-      const prefix = "~".repeat(f.level || 0);
-      let descValue: any = f.description;
-      if (descValue.startsWith("=")) {
-        descValue = { f: descValue.slice(1) };
-      }
-      const row = fillToC(["", "", ""]);
-      row[3] = prefix + f.name;
-      row[4] = descValue;
-      wsData.push(row);
-      currentRow++;
+      const prefixStr = "~".repeat(f.level || 0);
+      addRow(["", "", "", prefixStr + f.name, f.description]);
     });
 
-    const jsonEndRow = Math.max(currentRow - 1, startBodyRow + 5);
-    merges.push({
-      s: { r: startBodyRow + 1, c: 0 },
-      e: { r: jsonEndRow, c: 2 },
-    });
+    const jsonStartRow = startBodyRow + 1; // The subheader row
+    // Ensure at least 5 rows height for the JSON block to look good
+    const jsonEndRow = Math.max(currentRowIdx - 1, jsonStartRow + 5);
 
+    while (currentRowIdx <= jsonEndRow) {
+      addRow(["", "", "", "", ""]);
+    }
+
+    // Merge for JSON string
+    worksheet.mergeCells(jsonStartRow, 1, jsonEndRow, 3);
+
+    let jsonStr = "";
     try {
-      wsData[startBodyRow + 1][0] = JSON.stringify(
+      jsonStr = JSON.stringify(
         JSON.parse(config.requestJsonRaw || "{}"),
         null,
         2,
       );
     } catch (e) {
-      wsData[startBodyRow + 1][0] = config.requestJsonRaw;
+      jsonStr = config.requestJsonRaw || "";
     }
-
-    while (wsData.length <= jsonEndRow) {
-      wsData.push(["", "", "", "", ""]);
-    }
-    currentRow = wsData.length;
-    wsData.push([]);
-    currentRow++;
+    const jsonCell = worksheet.getCell(jsonStartRow, 1);
+    jsonCell.value = jsonStr;
+    // jsonCell alignment already set in addRow
   }
 
   // --- 3. Responses Section ---
-  wsData.push(["Responses JSON"]);
-  merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 4 } });
-  currentRow++;
-  config.responses.forEach((resp) => {
-    const startRespRow = currentRow;
-    const row1 = [resp.statusCode, resp.statusText, "", resp.note, ""];
-    wsData.push(row1);
-    merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow, c: 2 } });
-    merges.push({ s: { r: currentRow, c: 3 }, e: { r: currentRow, c: 4 } });
-    currentRow++;
+  const responsesHeaderRow = currentRowIdx;
+  addRow(["Responses JSON"]);
+  mergeCells(responsesHeaderRow, 1, 5);
+  setDoubleTopBorder(responsesHeaderRow);
+  worksheet.getCell(responsesHeaderRow, 1).alignment =
+    EXCEL_STYLES.ALIGNMENT.CENTER;
 
-    const row2 = ["", "", "", "參數", "意思"];
-    wsData.push(row2);
-    currentRow++;
+  config.responses.forEach((resp) => {
+    const startRespRow = currentRowIdx;
+    setDoubleTopBorder(startRespRow);
+
+    // Status Row
+    // Color code based on range
+    const codeNum = parseInt(String(resp.statusCode));
+    const colorArgb = getStatusColor(codeNum);
+
+    addRow([resp.statusCode, resp.statusText, "", resp.note, ""]);
+    mergeCells(currentRowIdx - 1, 2, 3); // B-C
+    mergeCells(currentRowIdx - 1, 4, 5); // D-E
+
+    // Apply color and alignment to Status Code (Col 1)
+    const codeCell = worksheet.getCell(currentRowIdx - 1, 1);
+    codeCell.font = {
+      name: EXCEL_STYLES.FONT.NAME,
+      size: EXCEL_STYLES.FONT.SIZE,
+      color: colorArgb,
+    };
+    codeCell.alignment = EXCEL_STYLES.ALIGNMENT.RIGHT;
+
+    // Apply color and alignment to Status Text (Col 2 - Merged)
+    // Note: Col 2 is the start of merged cell for status text
+    const textCell = worksheet.getCell(currentRowIdx - 1, 2);
+    textCell.font = {
+      name: EXCEL_STYLES.FONT.NAME,
+      size: EXCEL_STYLES.FONT.SIZE,
+      color: colorArgb,
+    };
+    textCell.alignment = EXCEL_STYLES.ALIGNMENT.CENTER;
+    // SubHeader
+    const subHeaderRowIdx = currentRowIdx;
+    addRow(["", "", "", "參數", "意思"]);
+    worksheet.getCell(subHeaderRowIdx, 4).font = {
+      name: EXCEL_STYLES.FONT.NAME,
+      size: EXCEL_STYLES.FONT.SIZE,
+      bold: true,
+    };
+    worksheet.getCell(subHeaderRowIdx, 5).font = {
+      name: EXCEL_STYLES.FONT.NAME,
+      size: EXCEL_STYLES.FONT.SIZE,
+      bold: true,
+    };
 
     const respFlat = flattenFields(resp.fields);
     respFlat.forEach((f) => {
       const prefix = "~".repeat(f.level || 0);
-      let descValue: any = f.description;
-      if (descValue.startsWith("=")) {
-        descValue = { f: descValue.slice(1) };
-      }
-      wsData.push(["", "", "", prefix + f.name, descValue]);
-      currentRow++;
+      addRow(["", "", "", prefix + f.name, f.description]);
     });
-    // 多一行
-    wsData.push([]);
-    currentRow++;
+    // addRow(["", "", "", "", ""]); //多一行
 
-    const jsonEndRow = Math.max(currentRow - 1, startRespRow + 5);
-    merges.push({
-      s: { r: startRespRow + 1, c: 0 },
-      e: { r: jsonEndRow, c: 2 },
-    });
+    const jsonStartRow = startRespRow + 1; // The subheader row
+    const jsonEndRow = Math.max(currentRowIdx - 1, jsonStartRow + 5) + 1;
 
+    while (currentRowIdx <= jsonEndRow) {
+      addRow(["", "", "", "", ""]);
+    }
+
+    // Merge JSON block (Cols 1-3)
+    worksheet.mergeCells(jsonStartRow, 1, jsonEndRow, 3);
+
+    let jsonStr = "";
     try {
-      wsData[startRespRow + 1][0] = JSON.stringify(
-        JSON.parse(resp.rawJson || "{}"),
-        null,
-        2,
-      );
+      jsonStr = JSON.stringify(JSON.parse(resp.rawJson || "{}"), null, 2);
     } catch (e) {
-      wsData[startRespRow + 1][0] = resp.rawJson || "";
+      jsonStr = resp.rawJson || "";
     }
-
-    while (wsData.length <= jsonEndRow) {
-      wsData.push(["", "", "", "", ""]);
-    }
-    currentRow = wsData.length;
-    // wsData.push([]);
-    // currentRow++;
+    const jsonCell = worksheet.getCell(jsonStartRow, 1);
+    jsonCell.value = jsonStr;
   });
 
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws["!merges"] = merges;
+  // Column Widths
+  worksheet.getColumn(1).width = 15;
+  worksheet.getColumn(2).width = 15;
+  worksheet.getColumn(3).width = 15;
+  worksheet.getColumn(4).width = 25;
+  worksheet.getColumn(5).width = 40;
 
-  ws["!cols"] = [
-    { wch: 15 }, // A
-    { wch: 15 }, // B
-    { wch: 15 }, // C
-    { wch: 25 }, // D
-    { wch: 40 }, // E
-  ];
-
-  const titleForName =
-    config.apiMeta.description || config.apiMeta.title || "API";
-
-  const sanitizedTitle = titleForName.replace(/[\\/?*:[\]]/g, "_");
-  const sheetName = `${config.apiMeta.method}_${sanitizedTitle}`.slice(0, 31);
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, `${sheetName}.xlsx`);
+  // Write file
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  saveAs(blob, `${sheetName}.xlsx`);
 }
