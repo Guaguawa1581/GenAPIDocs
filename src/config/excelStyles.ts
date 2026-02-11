@@ -2,20 +2,20 @@ export const EXCEL_STYLES = {
   FONT: {
     NAME: "Arial",
     SIZE: 10,
-    COLOR_DEFAULT: { argb: "FF000000" }, // Black
-    COLOR_BLUE: { argb: "FF0000FF" }, // Blue for vars
-    COLOR_GREEN: { argb: "FF008000" }, // 200 Status
-    COLOR_RED: { argb: "FFFF0000" }, // 400 Status
-    COLOR_YELLOW: { argb: "FFEECD00" }, // 500 Status
+    COLOR_DEFAULT: { argb: "FF000000" },
+    COLOR_BLUE: { argb: "FF4285F4" },
+    COLOR_GREEN: { argb: "FF34A853" },
+    COLOR_RED: { argb: "FFEA4335" },
+    COLOR_YELLOW: { argb: "FFFBBC04" },
   },
   BORDER: {
     THIN: "thin",
     DOUBLE: "double",
   },
   ALIGNMENT: {
-    DEFAULT: { vertical: "top", wrapText: true },
-    CENTER: { vertical: "top", wrapText: true, horizontal: "center" },
-    RIGHT: { vertical: "top", wrapText: true, horizontal: "right" },
+    DEFAULT: { vertical: "middle", wrapText: true },
+    CENTER: { vertical: "middle", wrapText: true, horizontal: "center" },
+    RIGHT: { vertical: "middle", wrapText: true, horizontal: "right" },
+    TOP_LEFT: { vertical: "top", wrapText: true, horizontal: "left" },
   },
-
 } as const;

@@ -19,19 +19,29 @@ function parseUrlToRichText(url: string) {
           text: currentStr,
           font: { name: EXCEL_STYLES.FONT.NAME, size: EXCEL_STYLES.FONT.SIZE },
         });
-        currentStr = "";
       }
-      inBracket = true;
-      currentStr += char;
-    } else if (char === "}") {
-      currentStr += char;
+      // Add '{' as normal text
       parts.push({
-        text: currentStr,
-        font: {
-          name: EXCEL_STYLES.FONT.NAME,
-          size: EXCEL_STYLES.FONT.SIZE,
-          color: EXCEL_STYLES.FONT.COLOR_BLUE,
-        },
+        text: "{",
+        font: { name: EXCEL_STYLES.FONT.NAME, size: EXCEL_STYLES.FONT.SIZE },
+      });
+      currentStr = "";
+      inBracket = true;
+    } else if (char === "}") {
+      if (currentStr) {
+        parts.push({
+          text: currentStr,
+          font: {
+            name: EXCEL_STYLES.FONT.NAME,
+            size: EXCEL_STYLES.FONT.SIZE,
+            color: EXCEL_STYLES.FONT.COLOR_BLUE,
+          },
+        });
+      }
+      // Add '}' as normal text
+      parts.push({
+        text: "}",
+        font: { name: EXCEL_STYLES.FONT.NAME, size: EXCEL_STYLES.FONT.SIZE },
       });
       currentStr = "";
       inBracket = false;
@@ -40,21 +50,14 @@ function parseUrlToRichText(url: string) {
     }
   }
   if (currentStr) {
-    if (inBracket) {
-      parts.push({
-        text: currentStr,
-        font: {
-          name: EXCEL_STYLES.FONT.NAME,
-          size: EXCEL_STYLES.FONT.SIZE,
-          color: EXCEL_STYLES.FONT.COLOR_BLUE,
-        },
-      });
-    } else {
-      parts.push({
-        text: currentStr,
-        font: { name: EXCEL_STYLES.FONT.NAME, size: EXCEL_STYLES.FONT.SIZE },
-      });
-    }
+    parts.push({
+      text: currentStr,
+      font: {
+        name: EXCEL_STYLES.FONT.NAME,
+        size: EXCEL_STYLES.FONT.SIZE,
+        ...(inBracket ? { color: EXCEL_STYLES.FONT.COLOR_BLUE } : {}),
+      },
+    });
   }
   return { richText: parts };
 }
@@ -65,6 +68,16 @@ function getStatusColor(code: number) {
   if (code >= 400 && code < 500) return EXCEL_STYLES.FONT.COLOR_RED;
   if (code >= 500) return EXCEL_STYLES.FONT.COLOR_YELLOW;
   return EXCEL_STYLES.FONT.COLOR_DEFAULT;
+}
+
+function getActionText(method: string) {
+  const methodMap: Record<string, string> = {
+    GET: "HttpGet",
+    POST: "HttpPost",
+    PUT: "HttpPatch、HttpPut",
+    DELETE: "HttpDelete",
+  };
+  return methodMap[method] || method;
 }
 
 export async function exportToExcel(config: ApiDocConfig) {
@@ -119,14 +132,43 @@ export async function exportToExcel(config: ApiDocConfig) {
     }
   };
 
+  // Helper to remove internal borders for Parameter/Meaning table
+  const fixParameterTableBorders = (start: number, end: number) => {
+    for (let r = start; r <= end; r++) {
+      const row = worksheet.getRow(r);
+      const c4 = row.getCell(4);
+      const c5 = row.getCell(5);
+
+      // Remove vertical border between 4 and 5
+      c4.border = {
+        ...c4.border,
+        right: undefined,
+      };
+      c5.border = {
+        ...c5.border,
+        left: undefined,
+      };
+
+      // Remove horizontal borders between rows within this block (4 and 5)
+      if (r < end) {
+        c4.border = { ...c4.border, bottom: undefined };
+        c5.border = { ...c5.border, bottom: undefined };
+      }
+      if (r > start) {
+        c4.border = { ...c4.border, top: undefined };
+        c5.border = { ...c5.border, top: undefined };
+      }
+    }
+  };
+
   // --- 1. Header Section ---
   const titleContent = config.apiMeta.title;
-  addRow(["API功能", titleContent]);
+  addRow(["API: 功能", titleContent]);
   mergeCells(currentRowIdx - 1, 2, 5); // B to E
 
   // API URL
   const urlRichText = parseUrlToRichText(config.apiMeta.url);
-  addRow(["API URL", urlRichText]);
+  addRow(["API: URL", urlRichText]);
   mergeCells(currentRowIdx - 1, 2, 5);
 
   const urlExample = generateUrlExample(
@@ -151,7 +193,7 @@ export async function exportToExcel(config: ApiDocConfig) {
   if (config.routeParams.length > 0) {
     const startRow = currentRowIdx;
     config.routeParams.forEach((p, index) => {
-      const firstCol = index === 0 ? "FormRoute" : "";
+      const firstCol = index === 0 ? "API: Route" : "";
       addRow([firstCol, p.name, p.description]);
       mergeCells(currentRowIdx - 1, 3, 5); // C to E
     });
@@ -159,12 +201,12 @@ export async function exportToExcel(config: ApiDocConfig) {
     if (currentRowIdx - 1 > startRow) {
       worksheet.mergeCells(startRow, 1, currentRowIdx - 1, 1);
     }
-    setDoubleTopBorder(startRow);
+    // setDoubleTopBorder(startRow);
   } else {
     const startRow = currentRowIdx;
-    addRow(["FormRoute", "", ""]);
-    mergeCells(startRow, 2, 5); // B to E
-    setDoubleTopBorder(startRow);
+    addRow(["API: Route", "", ""]);
+    mergeCells(startRow, 3, 5); // C to E
+    // setDoubleTopBorder(startRow);
   }
 
   // --- Query Params ---
@@ -174,23 +216,23 @@ export async function exportToExcel(config: ApiDocConfig) {
   if (visibleQueryParams.length > 0) {
     const startRow = currentRowIdx;
     visibleQueryParams.forEach((p, index) => {
-      const firstCol = index === 0 ? "FormQuery" : "";
+      const firstCol = index === 0 ? "API: Query" : "";
       addRow([firstCol, p.name, p.description]);
       mergeCells(currentRowIdx - 1, 3, 5);
     });
     if (currentRowIdx - 1 > startRow) {
       worksheet.mergeCells(startRow, 1, currentRowIdx - 1, 1);
     }
-    setDoubleTopBorder(startRow);
+    // setDoubleTopBorder(startRow);
   } else {
     const startRow = currentRowIdx;
-    addRow(["FormQuery", "無參數資料"]);
-    mergeCells(startRow, 2, 5);
-    setDoubleTopBorder(startRow);
+    addRow(["API: Query", "", ""]);
+    mergeCells(startRow, 3, 5);
+    // setDoubleTopBorder(startRow);
   }
 
   // --- Action ---
-  const actionText = `Http${config.apiMeta.method.charAt(0).toUpperCase()}${config.apiMeta.method.slice(1).toLowerCase()}`;
+  const actionText = getActionText(config.apiMeta.method);
   addRow(["行為", actionText]);
   mergeCells(currentRowIdx - 1, 2, 5);
   // Bold actionText (Cell B)
@@ -255,7 +297,9 @@ export async function exportToExcel(config: ApiDocConfig) {
     }
     const jsonCell = worksheet.getCell(jsonStartRow, 1);
     jsonCell.value = jsonStr;
-    // jsonCell alignment already set in addRow
+    jsonCell.alignment = EXCEL_STYLES.ALIGNMENT.TOP_LEFT;
+    // Remove internal borders for params block
+    fixParameterTableBorders(subHeaderRowIdx, currentRowIdx - 1);
   }
 
   // --- 3. Responses Section ---
@@ -268,7 +312,6 @@ export async function exportToExcel(config: ApiDocConfig) {
 
   config.responses.forEach((resp) => {
     const startRespRow = currentRowIdx;
-    setDoubleTopBorder(startRespRow);
 
     // Status Row
     // Color code based on range
@@ -278,6 +321,7 @@ export async function exportToExcel(config: ApiDocConfig) {
     addRow([resp.statusCode, resp.statusText, "", resp.note, ""]);
     mergeCells(currentRowIdx - 1, 2, 3); // B-C
     mergeCells(currentRowIdx - 1, 4, 5); // D-E
+    setDoubleTopBorder(startRespRow);
 
     // Apply color and alignment to Status Code (Col 1)
     const codeCell = worksheet.getCell(currentRowIdx - 1, 1);
@@ -316,10 +360,9 @@ export async function exportToExcel(config: ApiDocConfig) {
       const prefix = "~".repeat(f.level || 0);
       addRow(["", "", "", prefix + f.name, f.description]);
     });
-    // addRow(["", "", "", "", ""]); //多一行
 
     const jsonStartRow = startRespRow + 1; // The subheader row
-    const jsonEndRow = Math.max(currentRowIdx - 1, jsonStartRow + 5) + 1;
+    const jsonEndRow = Math.max(currentRowIdx - 1, jsonStartRow + 4) + 1; //多一行
 
     while (currentRowIdx <= jsonEndRow) {
       addRow(["", "", "", "", ""]);
@@ -336,14 +379,26 @@ export async function exportToExcel(config: ApiDocConfig) {
     }
     const jsonCell = worksheet.getCell(jsonStartRow, 1);
     jsonCell.value = jsonStr;
+    jsonCell.alignment = EXCEL_STYLES.ALIGNMENT.TOP_LEFT;
+
+    // Remove internal borders for params block
+    fixParameterTableBorders(subHeaderRowIdx, currentRowIdx - 1);
   });
+
+  // config
+  for (let i = 0; i < 10; i++) {
+    worksheet.addRow([]);
+  }
+  worksheet.addRow(["Excel Config"]);
+  worksheet.addRow([JSON.stringify(config, null)]);
+  currentRowIdx += 12;
 
   // Column Widths
   worksheet.getColumn(1).width = 15;
   worksheet.getColumn(2).width = 15;
   worksheet.getColumn(3).width = 15;
   worksheet.getColumn(4).width = 25;
-  worksheet.getColumn(5).width = 40;
+  worksheet.getColumn(5).width = 100;
 
   // Write file
   const buffer = await workbook.xlsx.writeBuffer();
