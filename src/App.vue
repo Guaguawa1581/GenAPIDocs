@@ -34,7 +34,7 @@ const items = computed(() => [
       draftStore.config.apiMeta.method === "GET",
   },
   {
-    label: "Response 區",
+    label: "Responses",
     disabled: activeStep.value < 4 && !draftStore.config.apiMeta.title,
   },
   {
@@ -143,7 +143,7 @@ const prevStep = () => {
     </main>
 
     <footer class="app-footer">
-      <p>&copy; 2024 API Excel Generator - 離線可用</p>
+      <p>&copy; 2026 API ExcelDocs Generator For IMPELEX CO.</p>
     </footer>
   </div>
 </template>

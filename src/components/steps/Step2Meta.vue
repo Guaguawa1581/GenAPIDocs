@@ -47,7 +47,7 @@ const currentUrlExample = computed(() =>
 const addUrlExample = () => {
   draftStore.config.urlExamples.push({
     id: crypto.randomUUID(),
-    name: "範例 " + (draftStore.config.urlExamples.length + 1),
+    name: "",
     url: currentUrlExample.value,
   });
 };

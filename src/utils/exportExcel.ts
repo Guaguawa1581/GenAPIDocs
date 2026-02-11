@@ -386,19 +386,19 @@ export async function exportToExcel(config: ApiDocConfig) {
   });
 
   // config
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 5; i++) {
     worksheet.addRow([]);
   }
   worksheet.addRow(["Excel Config"]);
   worksheet.addRow([JSON.stringify(config, null)]);
-  currentRowIdx += 12;
+  currentRowIdx += 7;
 
   // Column Widths
-  worksheet.getColumn(1).width = 15;
-  worksheet.getColumn(2).width = 15;
-  worksheet.getColumn(3).width = 15;
+  worksheet.getColumn(1).width = 20;
+  worksheet.getColumn(2).width = 20;
+  worksheet.getColumn(3).width = 20;
   worksheet.getColumn(4).width = 25;
-  worksheet.getColumn(5).width = 100;
+  worksheet.getColumn(5).width = 75;
 
   // Write file
   const buffer = await workbook.xlsx.writeBuffer();
