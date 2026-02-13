@@ -28,23 +28,34 @@ const handleRequestChange = (isManual = false) => {
     try {
       const newTree = parseRequestJson(raw);
 
-      // Merge descriptions by flattening both and comparing names
-      const currentFlat = flattenFields(currentTree);
-      const existingMap = new Map(
-        currentFlat.map((f) => [f.name, f.description]),
-      );
+      // Merge descriptions by path to handle nested fields correctly
+      const getDescMap = (fields: FieldDef[], path = "") => {
+        const map = new Map<string, string>();
+        fields.forEach((f) => {
+          const key = path ? `${path}.${f.name}` : f.name;
+          if (f.description) map.set(key, f.description);
+          if (f.children) {
+            const childMap = getDescMap(f.children, key);
+            childMap.forEach((v, k) => map.set(k, v));
+          }
+        });
+        return map;
+      };
 
-      const flattenAndMerge = (list: FieldDef[]) => {
+      const existingMap = getDescMap(currentTree);
+
+      const applyMerge = (list: FieldDef[], path = "") => {
         list.forEach((f) => {
-          if (existingMap.has(f.name)) {
-            f.description = existingMap.get(f.name)!;
+          const key = path ? `${path}.${f.name}` : f.name;
+          if (existingMap.has(key)) {
+            f.description = existingMap.get(key)!;
           }
           if (f.children && f.children.length > 0) {
-            flattenAndMerge(f.children);
+            applyMerge(f.children, key);
           }
         });
       };
-      flattenAndMerge(newTree);
+      applyMerge(newTree);
 
       draftStore.config.requestFields = newTree;
       if (isManual) {

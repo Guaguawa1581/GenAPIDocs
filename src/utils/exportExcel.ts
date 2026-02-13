@@ -148,16 +148,6 @@ export async function exportToExcel(config: ApiDocConfig) {
         ...c5.border,
         left: undefined,
       };
-
-      // Remove horizontal borders between rows within this block (4 and 5)
-      if (r < end) {
-        c4.border = { ...c4.border, bottom: undefined };
-        c5.border = { ...c5.border, bottom: undefined };
-      }
-      if (r > start) {
-        c4.border = { ...c4.border, top: undefined };
-        c5.border = { ...c5.border, top: undefined };
-      }
     }
   };
 
@@ -190,46 +180,50 @@ export async function exportToExcel(config: ApiDocConfig) {
   }
 
   // --- Route Params ---
+  let routeStartRow = currentRowIdx;
   if (config.routeParams.length > 0) {
-    const startRow = currentRowIdx;
     config.routeParams.forEach((p, index) => {
       const firstCol = index === 0 ? "API: Route" : "";
       addRow([firstCol, p.name, p.description]);
       mergeCells(currentRowIdx - 1, 3, 5); // C to E
     });
     // Merge "FormRoute" vertical
-    if (currentRowIdx - 1 > startRow) {
-      worksheet.mergeCells(startRow, 1, currentRowIdx - 1, 1);
+    if (currentRowIdx - 1 > routeStartRow) {
+      worksheet.mergeCells(routeStartRow, 1, currentRowIdx - 1, 1);
     }
     // setDoubleTopBorder(startRow);
   } else {
-    const startRow = currentRowIdx;
+    routeStartRow = currentRowIdx;
     addRow(["API: Route", "", ""]);
-    mergeCells(startRow, 3, 5); // C to E
+    mergeCells(routeStartRow, 3, 5); // C to E
     // setDoubleTopBorder(startRow);
   }
+  worksheet.getCell(routeStartRow, 1).alignment =
+    EXCEL_STYLES.ALIGNMENT.TOP_LEFT;
 
   // --- Query Params ---
   const visibleQueryParams = config.queryParams.filter(
     (p) => p.showInDesc !== false,
   );
+  let queryStartRow = currentRowIdx;
   if (visibleQueryParams.length > 0) {
-    const startRow = currentRowIdx;
     visibleQueryParams.forEach((p, index) => {
       const firstCol = index === 0 ? "API: Query" : "";
       addRow([firstCol, p.name, p.description]);
       mergeCells(currentRowIdx - 1, 3, 5);
     });
-    if (currentRowIdx - 1 > startRow) {
-      worksheet.mergeCells(startRow, 1, currentRowIdx - 1, 1);
+    if (currentRowIdx - 1 > queryStartRow) {
+      worksheet.mergeCells(queryStartRow, 1, currentRowIdx - 1, 1);
     }
     // setDoubleTopBorder(startRow);
   } else {
-    const startRow = currentRowIdx;
+    queryStartRow = currentRowIdx;
     addRow(["API: Query", "", ""]);
-    mergeCells(startRow, 3, 5);
+    mergeCells(queryStartRow, 3, 5);
     // setDoubleTopBorder(startRow);
   }
+  worksheet.getCell(queryStartRow, 1).alignment =
+    EXCEL_STYLES.ALIGNMENT.TOP_LEFT;
 
   // --- Action ---
   const actionText = getActionText(config.apiMeta.method);

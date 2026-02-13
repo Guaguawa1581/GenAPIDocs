@@ -66,8 +66,31 @@ const handleUrlChange = (isManual = false) => {
     const { pathParams, queryParams } = parseUrl(draftStore.config.apiMeta.url);
     const hadPageInfo = hasPageInfo.value;
 
-    draftStore.config.routeParams = pathParams;
-    draftStore.config.queryParams = queryParams;
+    // Helper to merge params by name
+    const mergeParams = (newParams: any[], oldParams: any[]) => {
+      const oldMap = new Map(
+        oldParams.map((p) => [p.name || p.description, p]),
+      );
+      return newParams.map((p) => {
+        const old = oldMap.get(p.name || p.description);
+        if (old) {
+          if (old.description) p.description = old.description;
+          if (old.example && !p.example) p.example = old.example;
+          if (old.showInDesc !== undefined) p.showInDesc = old.showInDesc;
+          if (old.includeInUrl !== undefined) p.includeInUrl = old.includeInUrl;
+        }
+        return p;
+      });
+    };
+
+    draftStore.config.routeParams = mergeParams(
+      pathParams,
+      draftStore.config.routeParams,
+    );
+    draftStore.config.queryParams = mergeParams(
+      queryParams,
+      draftStore.config.queryParams,
+    );
 
     if (hadPageInfo) {
       hasPageInfo.value = true;
