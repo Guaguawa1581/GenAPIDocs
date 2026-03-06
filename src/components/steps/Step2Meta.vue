@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useDraftStore } from "../../stores/draft";
-import { parseUrl, generateUrlExample } from "../../utils/parseUrl";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
+import { useToast } from "primevue/usetoast";
+import { useDraftStore } from "../../stores/draft";
+import { parseUrl, generateUrlExample } from "../../utils/parseUrl";
 
 const draftStore = useDraftStore();
+const toast = useToast();
 const methods = ["GET", "POST", "PUT", "DELETE"];
 
 const PAGE_INFO_LINK = import.meta.env.VITE_PAGE_INFO_LINK || "";
@@ -97,6 +99,14 @@ const handleUrlChange = (isManual = false) => {
     }
   }
 };
+const copyToClipboard = (text: string) => {
+  navigator.clipboard.writeText(text);
+  toast.add({
+    severity: "success",
+    summary: `複製成功 "${text}"`,
+    life: 1000,
+  });
+};
 </script>
 
 <template>
@@ -114,7 +124,13 @@ const handleUrlChange = (isManual = false) => {
       </div>
 
       <div class="field">
-        <label for="title">功能說明 (Excel 內容，可填函數)</label>
+        <label for="title"
+          >功能說明 (Excel內容，可填函數 ex:
+          <span class="link-fn" @click="copyToClipboard('=APISchema!')">
+            APISchema
+          </span>
+          )</label
+        >
         <InputText
           id="title"
           v-model="draftStore.config.apiMeta.title"
@@ -395,5 +411,16 @@ const handleUrlChange = (isManual = false) => {
 
 .example-item:hover {
   background-color: #f1f5f9 !important;
+}
+
+.link-fn {
+  cursor: pointer;
+  color: var(--p-primary-color);
+  transition: color 0.2s ease;
+}
+
+.link-fn:hover {
+  color: var(--p-button-link-hover-color);
+  text-decoration: underline;
 }
 </style>
