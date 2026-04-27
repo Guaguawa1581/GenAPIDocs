@@ -23,6 +23,13 @@ const templates: { id: string; label: string; icon: string; method?: string; isI
 
 const showImportDialog = ref(false);
 const importJson = ref('');
+const showClearDialog = ref(false);
+
+const handleClear = () => {
+  draftStore.clearDraft();
+  showClearDialog.value = false;
+  toast.add({ severity: 'info', summary: '已清除', detail: '快取資料已清空，回到預設值', life: 3000 });
+};
 
 const selectTemplate = (t: typeof templates[0]) => {
   if (t.isImport) {
@@ -54,7 +61,17 @@ const handleImport = () => {
 
 <template>
   <div class="step-container">
-    <h2>Step 1: 選擇模板</h2>
+    <div class="step-header">
+      <h2>Step 1: 選擇模板</h2>
+      <Button
+        label="清除快取"
+        icon="pi pi-trash"
+        severity="danger"
+        variant="outlined"
+        size="small"
+        @click="showClearDialog = true"
+      />
+    </div>
     <div class="template-grid">
       <Card 
         v-for="t in templates" 
@@ -75,6 +92,15 @@ const handleImport = () => {
         </template>
       </Card>
     </div>
+
+    <!-- Clear Cache Dialog -->
+    <Dialog v-model:visible="showClearDialog" modal header="確認清除快取" :style="{ width: '400px' }">
+      <p>此操作將清除所有已儲存的設定，回到預設值，是否確認？</p>
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <Button label="取消" icon="pi pi-times" variant="text" @click="showClearDialog = false" />
+        <Button label="確認清除" icon="pi pi-trash" severity="danger" @click="handleClear" />
+      </div>
+    </Dialog>
 
     <!-- Import Dialog -->
     <Dialog v-model:visible="showImportDialog" modal header="匯入現有設定 (JSON)" :style="{ width: '50vw' }">
@@ -97,6 +123,16 @@ const handleImport = () => {
 </template>
 
 <style scoped>
+.step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.step-header h2 {
+  margin: 0;
+}
+
 .template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
