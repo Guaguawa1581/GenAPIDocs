@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useDraftStore } from "../../stores/draft";
 import {
   parseResponseJson,
@@ -25,6 +25,16 @@ import draggable from "vuedraggable";
 const draftStore = useDraftStore();
 const toast = useToast();
 const activeTabId = ref(draftStore.config.responses[0]?.id || "");
+
+// 當 responses 整批被替換（匯入設定 / 清除快取）時，重置回第一個分頁
+watch(
+  () => draftStore.config.responses,
+  (responses) => {
+    if (!responses.find((r) => r.id === activeTabId.value)) {
+      activeTabId.value = responses[0]?.id || "";
+    }
+  },
+);
 
 const isComplex = (type: string) => type === "object" || type === "array";
 
@@ -85,6 +95,24 @@ const addResponse = () => {
   const newResp = createDefaultResponse(200, "New Response");
   draftStore.config.responses.push(newResp);
   activeTabId.value = newResp.id;
+};
+
+const duplicateResponse = (resp: ApiResponse) => {
+  const regenerateIds = (fields: FieldDef[]) => {
+    fields.forEach((f) => {
+      f.id = crypto.randomUUID();
+      if (f.children && f.children.length > 0) regenerateIds(f.children);
+    });
+  };
+
+  const cloned: ApiResponse = JSON.parse(JSON.stringify(resp));
+  cloned.id = crypto.randomUUID();
+  cloned.statusText = `${resp.statusText} -複製`;
+  regenerateIds(cloned.fields);
+
+  const index = draftStore.config.responses.findIndex((r) => r.id === resp.id);
+  draftStore.config.responses.splice(index + 1, 0, cloned);
+  activeTabId.value = cloned.id;
 };
 
 const removeResponse = (id: string) => {
@@ -237,7 +265,7 @@ const getStatusCodeColor = (statusCode: number) => {
 <template>
   <div class="step-container mw-100">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2 class="mb-0">Step 4: Responses (多重狀態設定)</h2>
+      <h2 class="mb-0">Step 4: Responses (回應)</h2>
       <div class="d-flex gap-2">
         <Button
           label="新增 Response 狀態"
@@ -293,6 +321,17 @@ const getStatusCodeColor = (statusCode: number) => {
         >
           <div class="response-editor-grid mt-3">
             <div class="resp-header mb-4 p-3 bg-light rounded border shadow-sm">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="fw-bold small text-secondary">Response 設定</span>
+                <Button
+                  label="複製此分頁"
+                  icon="pi pi-copy"
+                  size="small"
+                  severity="secondary"
+                  variant="outlined"
+                  @click="duplicateResponse(resp)"
+                />
+              </div>
               <div class="row g-3">
                 <div class="col-md-2">
                   <label class="form-label fw-bold small text-secondary"
