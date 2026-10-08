@@ -26,7 +26,7 @@ const hasPageInfo = computed({
           name: "",
           description: `=HYPERLINK("${PAGE_INFO_LINK}","pageInfo 參考")`,
           example: "",
-          showInDesc: false, // pageinfo default hide from description table
+          showInDesc: true, // pageinfo default show from description table
           includeInUrl: false, // pageinfo default hide from URL
         });
       }

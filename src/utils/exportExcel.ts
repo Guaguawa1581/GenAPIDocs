@@ -279,16 +279,8 @@ export async function exportToExcel(config: ApiDocConfig) {
     // Merge for JSON string
     worksheet.mergeCells(jsonStartRow, 1, jsonEndRow, 3);
 
-    let jsonStr = "";
-    try {
-      jsonStr = JSON.stringify(
-        JSON.parse(config.requestJsonRaw || "{}"),
-        null,
-        2,
-      );
-    } catch (e) {
-      jsonStr = config.requestJsonRaw || "";
-    }
+    // Keep the JSON exactly as the user typed it (whitespace/indentation preserved)
+    const jsonStr = config.requestJsonRaw?.trim() || "{}";
     const jsonCell = worksheet.getCell(jsonStartRow, 1);
     jsonCell.value = jsonStr;
     jsonCell.alignment = EXCEL_STYLES.ALIGNMENT.TOP_LEFT;
@@ -365,12 +357,8 @@ export async function exportToExcel(config: ApiDocConfig) {
     // Merge JSON block (Cols 1-3)
     worksheet.mergeCells(jsonStartRow, 1, jsonEndRow, 3);
 
-    let jsonStr = "";
-    try {
-      jsonStr = JSON.stringify(JSON.parse(resp.rawJson || "{}"), null, 2);
-    } catch (e) {
-      jsonStr = resp.rawJson || "";
-    }
+    // Keep the JSON exactly as the user typed it (whitespace/indentation preserved)
+    const jsonStr = resp.rawJson?.trim() || "{}";
     const jsonCell = worksheet.getCell(jsonStartRow, 1);
     jsonCell.value = jsonStr;
     jsonCell.alignment = EXCEL_STYLES.ALIGNMENT.TOP_LEFT;

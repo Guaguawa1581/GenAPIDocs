@@ -1,24 +1,14 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { useDraftStore } from "../../stores/draft";
-import {
-  parseRequestJson,
-  flattenFields,
-  unflattenFields,
-} from "../../utils/parseJson";
+import { parseRequestJson } from "../../utils/parseJson";
 import { useToast } from "primevue/usetoast";
 import { FieldDef } from "../../types";
 import Textarea from "primevue/textarea";
-import DataTable, { DataTableRowReorderEvent } from "primevue/datatable";
-import Column from "primevue/column";
-import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import Tag from "primevue/tag";
+import FieldTreeTable from "../FieldTreeTable.vue";
 
 const draftStore = useDraftStore();
 const toast = useToast();
-
-const isComplex = (type: string) => type === "object" || type === "array";
 
 const handleRequestChange = (isManual = false) => {
   const currentTree = draftStore.config.requestFields;
@@ -77,24 +67,6 @@ const handleRequestChange = (isManual = false) => {
   }
 };
 
-const deleteField = (id: string) => {
-  // Operations on tree are hard, so we flatten, remove, and unflatten
-  const allFlat = flattenFields(draftStore.config.requestFields);
-  const index = allFlat.findIndex((f) => f.id === id);
-  if (index === -1) return;
-
-  const target = allFlat[index];
-  let count = 1;
-  while (
-    index + count < allFlat.length &&
-    allFlat[index + count].level! > target.level!
-  ) {
-    count++;
-  }
-  allFlat.splice(index, count);
-  draftStore.config.requestFields = unflattenFields(allFlat);
-};
-
 const addCustomField = () => {
   // Add to the root level
   draftStore.config.requestFields.push({
@@ -109,112 +81,6 @@ const addCustomField = () => {
     children: [],
   });
 };
-
-const toggleExpand = (data: FieldDef) => {
-  data.expanded = !data.expanded;
-};
-
-const onRowReorder = (event: DataTableRowReorderEvent) => {
-  const { dragIndex, dropIndex } = event;
-  if (dragIndex === dropIndex) return;
-
-  let allFlat = flattenFields(draftStore.config.requestFields);
-  const displayed = getVisibleFields(allFlat);
-
-  const sourceRow = displayed[dragIndex];
-  let targetRow = displayed[dropIndex];
-
-  const realDragIndex = allFlat.indexOf(sourceRow);
-  const groupRows: FieldDef[] = [sourceRow];
-  let j = realDragIndex + 1;
-  while (j < allFlat.length && allFlat[j].level! > sourceRow.level!) {
-    groupRows.push(allFlat[j]);
-    j++;
-  }
-
-  // Validation
-  if (!sourceRow.isCustom) {
-    if (targetRow.level !== sourceRow.level) {
-      toast.add({
-        severity: "warn",
-        summary: "移動受限",
-        detail: "非自訂欄位僅能在同階層移動",
-        life: 2000,
-      });
-      return;
-    }
-    const startIndex = Math.min(realDragIndex, allFlat.indexOf(targetRow));
-    const endIndex = Math.max(realDragIndex, allFlat.indexOf(targetRow));
-    for (let k = startIndex + 1; k < endIndex; k++) {
-      if (allFlat[k].level! < sourceRow.level!) {
-        toast.add({
-          severity: "warn",
-          summary: "移動受限",
-          detail: "不可跨越父項目",
-          life: 2000,
-        });
-        return;
-      }
-    }
-  }
-
-  // Perform Move
-  allFlat.splice(realDragIndex, groupRows.length);
-  const newRealTargetIndex = allFlat.indexOf(targetRow);
-
-  let finalDropIndex = newRealTargetIndex;
-  if (dropIndex > dragIndex) {
-    let k = newRealTargetIndex + 1;
-    while (k < allFlat.length && allFlat[k].level! > targetRow.level!) {
-      k++;
-    }
-    finalDropIndex = k;
-  }
-
-  // Smart Level Adoption for Custom Fields
-  if (sourceRow.isCustom) {
-    const prevNode = allFlat[finalDropIndex - 1];
-    if (prevNode) {
-      // "level0跟level1之間自訂會變level1" -> if dropped after level 0 parent, it becomes level 1
-      if (isComplex(prevNode.type)) {
-        sourceRow.level = prevNode.level! + 1;
-      } else {
-        sourceRow.level = prevNode.level;
-      }
-    } else {
-      sourceRow.level = 0;
-    }
-
-    // Update children level relative to parent change
-    const diff = sourceRow.level! - (groupRows[0].level || 0);
-    if (diff !== 0) {
-      groupRows.forEach((f) => {
-        if (f !== sourceRow) f.level = (f.level || 0) + diff;
-      });
-    }
-  }
-
-  allFlat.splice(finalDropIndex, 0, ...groupRows);
-  draftStore.config.requestFields = unflattenFields(allFlat);
-};
-
-const getVisibleFields = (fullFlat: FieldDef[]) => {
-  const visible: FieldDef[] = [];
-  let skipUntilLevel: number | null = null;
-  for (const f of fullFlat) {
-    if (skipUntilLevel !== null) {
-      if (f.level! > skipUntilLevel) continue;
-      else skipUntilLevel = null;
-    }
-    visible.push(f);
-    if (isComplex(f.type) && !f.expanded) skipUntilLevel = f.level!;
-  }
-  return visible;
-};
-
-const displayedFields = computed(() =>
-  getVisibleFields(flattenFields(draftStore.config.requestFields)),
-);
 </script>
 
 <template>
@@ -254,91 +120,10 @@ const displayedFields = computed(() =>
           />
         </div>
 
-        <DataTable
-          :value="displayedFields"
-          size="small"
-          scrollable
+        <FieldTreeTable
+          v-model="draftStore.config.requestFields"
           scrollHeight="550px"
-          class="text-left border rounded shadow-sm"
-          @row-reorder="onRowReorder"
-          dataKey="id"
-        >
-          <Column rowReorder headerStyle="width: 3rem" />
-          <Column header="欄位名稱 (Key)" style="min-width: 12rem">
-            <template #body="{ data }">
-              <div
-                :style="{ paddingLeft: data.level * 0.5 + 'rem' }"
-                class="d-flex align-items-center gap-1"
-              >
-                <Button
-                  v-if="isComplex(data.type)"
-                  :icon="
-                    data.expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'
-                  "
-                  variant="text"
-                  class="p-0"
-                  style="width: 1.25rem; height: 1.25rem; flex-shrink: 0"
-                  @click="toggleExpand(data)"
-                />
-                <span
-                  v-else-if="data.level > 0"
-                  class="me-1 text-secondary opacity-50"
-                  >└</span
-                >
-
-                <div class="position-relative w-100">
-                  <InputText
-                    v-model="data.name"
-                    class="p-1 font-monospace w-100 border-0 bg-transparent edit-focus"
-                  />
-                  <div class="bottom-line"></div>
-                </div>
-                <Tag
-                  v-if="isComplex(data.type)"
-                  severity="info"
-                  size="small"
-                  value="Obj"
-                />
-                <Tag
-                  v-if="data.isCustom"
-                  severity="warn"
-                  size="small"
-                  value="User"
-                />
-              </div>
-            </template>
-          </Column>
-          <!-- <Column field="type" header="型態" style="width: 6rem">
-            <template #body="{ data }">
-              <span class="small text-secondary">{{ data.type }}</span>
-            </template>
-          </Column> -->
-          <Column header="意思 (Description)" style="width: 18rem">
-            <template #body="{ data }">
-              <InputText
-                v-model="data.description"
-                class="w-100 p-1 border-0 border-bottom rounded-0"
-                placeholder="說明文字"
-              />
-            </template>
-          </Column>
-          <Column header="操作" style="width: 4rem">
-            <template #body="{ data }">
-              <Button
-                icon="pi pi-trash"
-                variant="text"
-                severity="danger"
-                size="small"
-                @click="deleteField(data.id)"
-              />
-            </template>
-          </Column>
-        </DataTable>
-
-        <div class="mt-3 p-2 bg-light border rounded small text-secondary">
-          💡 自訂欄位移至物件下方會自動併入該物件。目前儲存結構：TreeNode {
-          children: [] }。
-        </div>
+        />
       </div>
     </div>
   </div>
@@ -357,33 +142,7 @@ const displayedFields = computed(() =>
   align-items: start;
 }
 
-.border {
-  border: 1px solid #e2e8f0;
-}
-.rounded {
-  border-radius: 8px;
-}
-
 .font-monospace {
   font-size: 0.85rem;
-}
-
-.edit-focus:focus {
-  box-shadow: none;
-  background: rgba(59, 130, 246, 0.05) !important;
-}
-
-.bottom-line {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #e2e8f0;
-}
-
-:deep(.p-datatable-reorderler-handle) {
-  cursor: grab;
-  color: #94a3b8;
 }
 </style>
