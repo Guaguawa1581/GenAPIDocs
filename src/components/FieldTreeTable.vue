@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { flattenFields, unflattenFields } from "../utils/parseJson";
+import { flattenFields } from "../utils/parseJson";
+import {
+  isComplex,
+  getVisibleFields,
+  removeFieldById,
+  moveVisibleField,
+} from "../utils/fieldTree";
 import {
   parseClipboardTable,
   fillDescriptionsDown,
@@ -22,22 +28,6 @@ const fields = defineModel<FieldDef[]>({ required: true });
 const toast = useToast();
 const tableWrapper = ref<HTMLElement>();
 
-const isComplex = (type: string) => type === "object" || type === "array";
-
-const getVisibleFields = (fullFlat: FieldDef[]) => {
-  const visible: FieldDef[] = [];
-  let skipUntilLevel: number | null = null;
-  for (const f of fullFlat) {
-    if (skipUntilLevel !== null) {
-      if (f.level! > skipUntilLevel) continue;
-      else skipUntilLevel = null;
-    }
-    visible.push(f);
-    if (isComplex(f.type) && !f.expanded) skipUntilLevel = f.level!;
-  }
-  return visible;
-};
-
 const displayedFields = computed(() =>
   getVisibleFields(flattenFields(fields.value)),
 );
@@ -46,108 +36,31 @@ const toggleExpand = (data: FieldDef) => {
   data.expanded = !data.expanded;
 };
 
-const deleteField = (id: string) => {
-  const removeRecursive = (list: FieldDef[]): boolean => {
-    for (let i = 0; i < list.length; i++) {
-      if (list[i].id === id) {
-        list.splice(i, 1);
-        return true;
-      }
-      if (list[i].children && removeRecursive(list[i].children as FieldDef[])) {
-        return true;
-      }
-    }
-    return false;
-  };
-  removeRecursive(fields.value);
-};
+const deleteField = (id: string) => removeFieldById(fields.value, id);
 
 const onRowReorder = (event: DataTableRowReorderEvent) => {
   const { dragIndex, dropIndex } = event;
   if (dragIndex === dropIndex) return;
 
-  let allFlat = flattenFields(fields.value);
-  const displayed = getVisibleFields(allFlat);
-
-  const sourceRow = displayed[dragIndex];
-  let targetRow = displayed[dropIndex];
-
-  const realDragIndex = allFlat.indexOf(sourceRow);
-  const groupRows: FieldDef[] = [sourceRow];
-  let j = realDragIndex + 1;
-  while (j < allFlat.length && allFlat[j].level! > sourceRow.level!) {
-    groupRows.push(allFlat[j]);
-    j++;
+  const result = moveVisibleField(fields.value, dragIndex, dropIndex);
+  if ("error" in result) {
+    toast.add({
+      severity: "warn",
+      summary: "移動受限",
+      detail: result.error,
+      life: 2000,
+    });
+    return;
   }
-
-  // Validation
-  if (!sourceRow.isCustom) {
-    if (targetRow.level !== sourceRow.level) {
-      toast.add({
-        severity: "warn",
-        summary: "移動受限",
-        detail: "非自訂欄位僅能在同階層移動",
-        life: 2000,
-      });
-      return;
-    }
-    const startIndex = Math.min(realDragIndex, allFlat.indexOf(targetRow));
-    const endIndex = Math.max(realDragIndex, allFlat.indexOf(targetRow));
-    for (let k = startIndex + 1; k < endIndex; k++) {
-      if (allFlat[k].level! < sourceRow.level!) {
-        toast.add({
-          severity: "warn",
-          summary: "移動受限",
-          detail: "不可跨越父項目",
-          life: 2000,
-        });
-        return;
-      }
-    }
-  }
-
-  // Perform Move
-  allFlat.splice(realDragIndex, groupRows.length);
-  const newRealTargetIndex = allFlat.indexOf(targetRow);
-
-  let finalDropIndex = newRealTargetIndex;
-  if (dropIndex > dragIndex) {
-    let k = newRealTargetIndex + 1;
-    while (k < allFlat.length && allFlat[k].level! > targetRow.level!) {
-      k++;
-    }
-    finalDropIndex = k;
-  }
-
-  // Smart Level Adoption for Custom Fields
-  if (sourceRow.isCustom) {
-    const prevNode = allFlat[finalDropIndex - 1];
-    if (prevNode) {
-      // "level0跟level1之間自訂會變level1" -> if dropped after level 0 parent, it becomes level 1
-      if (isComplex(prevNode.type)) {
-        sourceRow.level = prevNode.level! + 1;
-      } else {
-        sourceRow.level = prevNode.level;
-      }
-    } else {
-      sourceRow.level = 0;
-    }
-
-    // Update children level relative to parent change
-    const diff = sourceRow.level! - (groupRows[0].level || 0);
-    if (diff !== 0) {
-      groupRows.forEach((f) => {
-        if (f !== sourceRow) f.level = (f.level || 0) + diff;
-      });
-    }
-  }
-
-  allFlat.splice(finalDropIndex, 0, ...groupRows);
-  fields.value = unflattenFields(allFlat);
+  fields.value = result.tree;
 };
 
-// Excel-like paste: one column fills downward, "key + description" columns match by key
-const onDescriptionPaste = (event: ClipboardEvent, rowIndex: number) => {
+// Works on both the key and description cells; "key + description" columns always match by key
+const onCellPaste = (
+  event: ClipboardEvent,
+  column: "name" | "description",
+  rowIndex: number,
+) => {
   const text = event.clipboardData?.getData("text/plain") ?? "";
   const rows = parseClipboardTable(text);
   const isMultiColumn = rows.some((r) => r.length > 1);
@@ -158,6 +71,9 @@ const onDescriptionPaste = (event: ClipboardEvent, rowIndex: number) => {
 
   if (isMultiColumn) {
     const { matched, unmatched } = applyDescriptionsByKey(fields.value, rows);
+    // An unmatched first row is most likely the header (e.g. 參數 / 意思)
+    const header = (rows[0][0] ?? "").trim();
+    if (header && unmatched[0] === header) unmatched.shift();
     if (matched === 0) {
       toast.add({
         severity: "warn",
@@ -183,10 +99,11 @@ const onDescriptionPaste = (event: ClipboardEvent, rowIndex: number) => {
     displayedFields.value,
     rowIndex,
     rows.map((r) => r[0]),
+    column,
   );
   toast.add({
     severity: skipped ? "warn" : "success",
-    summary: "已貼上說明",
+    summary: column === "name" ? "已貼上欄位名稱" : "已貼上說明",
     detail: skipped
       ? `已填入 ${applied} 筆，超出 ${skipped} 筆已略過`
       : `已填入 ${applied} 筆`,
@@ -260,6 +177,7 @@ const onCellKeydown = (event: KeyboardEvent, col: string, rowIndex: number) => {
                 data-col="name"
                 :data-row="index"
                 @keydown="onCellKeydown($event, 'name', index)"
+                @paste="onCellPaste($event, 'name', index)"
               />
               <div class="bottom-line"></div>
             </div>
@@ -287,7 +205,7 @@ const onCellKeydown = (event: KeyboardEvent, col: string, rowIndex: number) => {
             data-col="desc"
             :data-row="index"
             @keydown="onCellKeydown($event, 'desc', index)"
-            @paste="onDescriptionPaste($event, index)"
+            @paste="onCellPaste($event, 'description', index)"
           />
         </template>
       </Column>
@@ -305,8 +223,8 @@ const onCellKeydown = (event: KeyboardEvent, col: string, rowIndex: number) => {
     </DataTable>
 
     <div class="mt-3 p-2 bg-light border rounded small text-secondary">
-      💡 從 Excel 複製一整欄說明，貼到任一「意思」欄位，會從該列往下依序填入；
-      複製「欄位名稱、說明」兩欄則依欄位名稱自動對應（不受順序影響）。 Enter / ↑
+      💡 從 Excel 複製「欄位名稱、說明」兩欄，貼到表格任一格，會依欄位名稱自動對應說明（不受順序影響，標題列會自動略過）；
+      只複製一欄則從該格往下依序填入。 Enter / ↑
       ↓ 可上下切換列，拖曳 ☰ 調整順序，自訂欄位移至物件下方會自動併入該物件。
     </div>
   </div>

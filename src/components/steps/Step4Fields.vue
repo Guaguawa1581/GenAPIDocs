@@ -15,7 +15,7 @@ import Tab from "primevue/tab";
 import TabPanels from "primevue/tabpanels";
 import TabPanel from "primevue/tabpanel";
 import draggable from "vuedraggable";
-import FieldTreeTable from "../FieldTreeTable.vue";
+import FieldSheet from "../FieldSheet.vue";
 
 const draftStore = useDraftStore();
 const toast = useToast();
@@ -280,7 +280,7 @@ const getStatusCodeColor = (statusCode: number) => {
                   />
                 </div>
 
-                <FieldTreeTable v-model="resp.fields" />
+                <FieldSheet v-model="resp.fields" />
               </div>
             </div>
           </div>

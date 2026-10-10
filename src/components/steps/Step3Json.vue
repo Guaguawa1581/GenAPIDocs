@@ -5,7 +5,7 @@ import { useToast } from "primevue/usetoast";
 import { FieldDef } from "../../types";
 import Textarea from "primevue/textarea";
 import Button from "primevue/button";
-import FieldTreeTable from "../FieldTreeTable.vue";
+import FieldSheet from "../FieldSheet.vue";
 
 const draftStore = useDraftStore();
 const toast = useToast();
@@ -120,7 +120,7 @@ const addCustomField = () => {
           />
         </div>
 
-        <FieldTreeTable
+        <FieldSheet
           v-model="draftStore.config.requestFields"
           scrollHeight="550px"
         />

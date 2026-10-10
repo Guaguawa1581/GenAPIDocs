@@ -70,19 +70,20 @@ export function parseClipboardTable(text: string): string[][] {
 }
 
 /**
- * Fill descriptions downward starting from `startIndex` of the displayed rows,
- * like pasting a column in Excel.
+ * Fill a column (description by default) downward starting from `startIndex`
+ * of the displayed rows, like pasting a column in Excel.
  */
 export function fillDescriptionsDown(
   displayed: FieldDef[],
   startIndex: number,
   values: string[],
+  column: "name" | "description" = "description",
 ) {
   let applied = 0;
   values.forEach((value, offset) => {
     const target = displayed[startIndex + offset];
     if (!target) return;
-    target.description = value.trim();
+    target[column] = value.trim();
     applied++;
   });
   return { applied, skipped: values.length - applied };

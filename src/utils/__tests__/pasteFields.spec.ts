@@ -62,6 +62,13 @@ describe("fillDescriptionsDown", () => {
     expect(rows.map((f) => f.description)).toEqual(["", "B", "C"]);
     expect(result).toEqual({ applied: 2, skipped: 1 });
   });
+
+  it("fills the name column when requested", () => {
+    const rows = [field("a"), field("b")];
+    fillDescriptionsDown(rows, 0, ["x", "y"], "name");
+    expect(rows.map((f) => f.name)).toEqual(["x", "y"]);
+    expect(rows.map((f) => f.description)).toEqual(["", ""]);
+  });
 });
 
 describe("applyDescriptionsByKey", () => {
