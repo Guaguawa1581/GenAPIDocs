@@ -218,6 +218,7 @@ onBeforeUnmount(() =>
         :row-size="36"
         range
         resize
+        apply-on-close
         hide-attribution
         @beforeedit="onBeforeEdit"
         @beforerangeedit="onBeforeRangeEdit"
